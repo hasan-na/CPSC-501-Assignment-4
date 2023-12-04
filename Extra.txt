@@ -1,0 +1,9 @@
+    int bytesPerSample = header_sample.bits_per_sample / 8; // number of data points in the sample
+    int num_samples = subchunk2_size_sample / bytesPerSample;
+    int duration = num_samples / header_sample.sample_rate;
+    int totalSamples = header_sample.sample_rate * duration;
+ 
+    int bytesPerImpulse = header_impulse.bits_per_sample / 8; // number of data points in the sample
+    int num_impulse = subchunk2_size_impulse / bytesPerImpulse;
+    duration = num_impulse / header_impulse.sample_rate;
+    int totalImpulses = header_impulse.sample_rate * duration;
