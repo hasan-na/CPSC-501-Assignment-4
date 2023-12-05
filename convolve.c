@@ -51,7 +51,7 @@ void writeWavHeader(FILE *outputFile, WavHeader header , int bytes_per_sample, i
     int dataChunkSize = 1 * numberSamples * bytes_per_sample;
     int formSize = 36 + dataChunkSize;
     short int frameSize = 1 * bytes_per_sample;
-    int bytesPerSecond = (int)ceil(header.sample_rate * frameSize);
+    int bytesPerSecond =header.sample_rate * frameSize;
     fputs("RIFF", outputFile);
     fwriteIntLSB(formSize, outputFile);
     fputs("WAVE", outputFile);
@@ -59,10 +59,10 @@ void writeWavHeader(FILE *outputFile, WavHeader header , int bytes_per_sample, i
     fwriteIntLSB(16, outputFile);
     fwriteShortLSB(1, outputFile);
     fwriteShortLSB((short)1, outputFile);
-    fwriteIntLSB((int)header.sample_rate, outputFile);
+    fwriteIntLSB(header.sample_rate, outputFile);
     fwriteIntLSB(bytesPerSecond, outputFile);
     fwriteShortLSB(frameSize, outputFile);
-    fwriteShortLSB(bytes_per_sample, outputFile);
+    fwriteShortLSB(8 * bytes_per_sample, outputFile);
     fputs("data", outputFile);
     fwriteIntLSB(dataChunkSize, outputFile);
 }
@@ -89,21 +89,29 @@ void convolve(float x[], int N, float h[], int M, float y[], int P)
 
 // Function to write float data to a WAV file
 void writeData(FILE *file, float data[], int size) {
+    // Find the maximum absolute value
+    float maxVal = 0.0f;
+    for (int i = 0; i < size; ++i) {
+        float absVal = fabs(data[i]);
+        if (absVal > maxVal) {
+            maxVal = absVal;
+        }
+    }
+
+    // Normalize the data and write to file
     FILE *textFile = fopen("output.txt", "w");
     for (int i = 0; i < size; ++i) {
-        short value = (short)(data[i] * 32768.0);
-        if (value > 1)
-        value = 1;
+        // Normalize the data
+        data[i] /= maxVal;
 
-        if (value < -1)
-        value = -1;
+        // Convert to short and write to file
+        short value = (short)(data[i] * 32768.0);
         fwrite(&value, sizeof(value), 1, file);
 
         fprintf(textFile, "%hd\n", value);
     }
     fclose(textFile);
 }
-
 
 /**
 Read the tones, and call convolve on them
@@ -141,28 +149,29 @@ void readTone(char *sampleTone, char *impulseTone, char *output) {
     fread(&subchunk2_size_impulse, sizeof(subchunk2_size_impulse), 1, impulseFileStream);
 
     
-    int bytesPerSample = header_sample.bits_per_sample / 8; 
+    int bytesPerSample = header_sample.bits_per_sample / 8; // number of data points in the sample
     int num_samples = subchunk2_size_sample / bytesPerSample;
-    size_t num_size = subchunk2_size_sample; 
-
+    int duration = num_samples / header_sample.sample_rate;
+    int totalSamples = header_sample.sample_rate * duration;
  
-    int bytesPerImpulse = header_impulse.bits_per_sample / 8; 
+    int bytesPerImpulse = header_impulse.bits_per_sample / 8; // number of data points in the sample
     int num_impulse = subchunk2_size_impulse / bytesPerImpulse;
-    size_t impulse_size = subchunk2_size_impulse; 
+    duration = num_impulse / header_impulse.sample_rate;
+    int totalImpulses = header_impulse.sample_rate * duration;
 
-    float *sampleData = (float *)malloc(num_size * sizeof(float));
-    float *impulseData = (float *)malloc(impulse_size * sizeof(float));
+    float *sampleData = (float *)malloc(totalSamples * sizeof(float));
+    float *impulseData = (float *)malloc(totalImpulses * sizeof(float));
 
-   for (int i = 0; i < num_samples; ++i) { 
+   for (int i = 0; i < totalSamples; ++i) { 
     short sampleValue;
     fread(&sampleValue, sizeof(sampleValue), 1, sampleFileStream);
-    sampleData[i] = sampleValue;
+    sampleData[i] = shortToFloat(sampleValue);
 }
 
-   for (int i = 0; i < num_impulse; ++i) { 
+for (int i = 0; i < totalImpulses; ++i) { 
     short impulseValue;
     fread(&impulseValue, sizeof(impulseValue), 1, impulseFileStream);
-    impulseData[i] = impulseValue;
+    impulseData[i] = shortToFloat(impulseValue);
 }
 
     // Close the input files
@@ -170,9 +179,9 @@ void readTone(char *sampleTone, char *impulseTone, char *output) {
     fclose(impulseFileStream);
 
     // Convolve the data
-    int outputSize = num_samples + num_impulse - 1;
+    int outputSize = totalSamples + totalImpulses - 1;
     float *outputData = (float *)malloc(outputSize * sizeof(float));
-    convolve(sampleData, num_samples, impulseData, num_impulse, outputData, outputSize);
+    convolve(sampleData, totalSamples, impulseData, totalImpulses, outputData, outputSize);
 
     // Write the output WAV file
     writeWavHeader(outputFileStream, header_sample, bytesPerSample, outputSize);
