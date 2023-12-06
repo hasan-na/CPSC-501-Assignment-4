@@ -78,7 +78,6 @@ float shortToFloat(short value) {
 }
 
 // Function to convolve two signals using the FFT
-// Code inspired from Kimiya tutorial slides on CPSC501_F23_reverse_audio_time_convolution_FFT
 void four1(double data[], int nn, int isign)
 {
     unsigned long n, mmax, m, j, istep, i;
@@ -129,12 +128,15 @@ void four1(double data[], int nn, int isign)
 
 double* multiplyFrequencyData(double* freqData1, double* freqData2, int size) {
     double* result = (double*)malloc(size * sizeof(double));
-    for (int i = 0; i < size; i += 2) {
-        result[i] = freqData1[i] * freqData2[i] - freqData1[i+1] * freqData2[i+1]; // real part
-        result[i + 1] = freqData1[i+1] * freqData2[i] + freqData1[i] * freqData2[i+1]; // imaginary part
+    for (int i = 0; i < size; ++i) {
+        int nextIndex = i + 1;
+        result[i] = freqData1[i] * freqData2[i] - freqData1[nextIndex] * freqData2[nextIndex]; // real part
+        result[nextIndex] = freqData1[nextIndex] * freqData2[i] + freqData1[i] * freqData2[nextIndex]; // imaginary part
+        ++i; 
     }
     return result;
 }
+
 
 double* convertToComplex(float* data, int dataSize, int arraySize) {
     double* complexData = (double*)malloc(arraySize * 2 * sizeof(double));
@@ -186,7 +188,6 @@ void writeData(FILE *file, float data[], int size) {
 /**
 Read the tones, and call convolve on them
 */
-//Code inspired from TA Ali Week 10 - Session 2 - Updated files
 void readTone(char *sampleTone, char *impulseTone, char *output) {
     FILE *sampleFileStream = fopen(sampleTone, "rb");
     FILE *impulseFileStream = fopen(impulseTone, "rb");

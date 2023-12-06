@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 #define SIZE       8
 #define PI         3.141592653589793
 #define TWO_PI     (2.0 * PI)
 #define SWAP(a,b)  tempr=(a);(a)=(b);(b)=tempr
+#define MAX_SHORT_VALUE 32768.0
 
 typedef struct {
     char chunk_id[4];
@@ -35,7 +37,7 @@ void printWavHeader(WavHeader header){
     printf("bits_per_sample: %d\n", header.bits_per_sample);
 }
 
-//Code inspired from the file in Course Documents in the Audio FIle Formats Test Tone Sample Code C file
+
 void fwriteIntLSB(int value, FILE *file) {
     unsigned char buffer[4];
     buffer[0] = (value & 0x000000FF);
@@ -44,7 +46,7 @@ void fwriteIntLSB(int value, FILE *file) {
     buffer[3] = (value & 0xFF000000) >> 24;
     fwrite(buffer, 4, 1, file);
 }
-//Code inspired from the file in Course Documents in the Audio FIle Formats Test Tone Sample Code C file
+
 void fwriteShortLSB(short value, FILE *file) {
     unsigned char buffer[2];
     buffer[0] = (value & 0x00FF);
@@ -52,7 +54,7 @@ void fwriteShortLSB(short value, FILE *file) {
     fwrite(buffer, 2, 1, file);
 }
 
-//Code inspired from the file in Course Documents in the Audio FIle Formats Test Tone Sample Code C file
+
 void writeWavHeader(FILE *outputFile, WavHeader header , int bytes_per_sample, int numberSamples) {
     int dataChunkSize = 1 * numberSamples * bytes_per_sample;
     int formSize = 36 + dataChunkSize;
@@ -74,11 +76,10 @@ void writeWavHeader(FILE *outputFile, WavHeader header , int bytes_per_sample, i
 }
 
 float shortToFloat(short value) {
-   return value / 32768.0;
+   return value / MAX_SHORT_VALUE;
 }
 
 // Function to convolve two signals using the FFT
-// Code inspired from Kimiya tutorial slides on CPSC501_F23_reverse_audio_time_convolution_FFT
 void four1(double data[], int nn, int isign)
 {
     unsigned long n, mmax, m, j, istep, i;
@@ -129,25 +130,25 @@ void four1(double data[], int nn, int isign)
 
 double* multiplyFrequencyData(double* freqData1, double* freqData2, int size) {
     double* result = (double*)malloc(size * sizeof(double));
-    for (int i = 0; i < size; i += 2) {
-        result[i] = freqData1[i] * freqData2[i] - freqData1[i+1] * freqData2[i+1]; // real part
-        result[i + 1] = freqData1[i+1] * freqData2[i] + freqData1[i] * freqData2[i+1]; // imaginary part
+    for (int i = 0; i < size; ++i) {
+        int nextIndex = i + 1;
+        result[i] = freqData1[i] * freqData2[i] - freqData1[nextIndex] * freqData2[nextIndex]; // real part
+        result[nextIndex] = freqData1[nextIndex] * freqData2[i] + freqData1[i] * freqData2[nextIndex]; // imaginary part
+        ++i; 
     }
     return result;
 }
 
-double* convertToComplex(float* data, int dataSize, int arraySize) {
-    double* complexData = (double*)malloc(arraySize * 2 * sizeof(double));
 
-    for (int i = 0; i < arraySize; i++) {
-        complexData[i] = 0.0;
-    }
+double* convertToComplex(float* data, int dataSize, int arraySize) {
+    double* complexData = (double*)calloc(arraySize * 2, sizeof(double));
 
     for (int i = 0; i < dataSize; i++) {
         complexData[i * 2] = data[i]; // real part
     }
     return complexData;
 }
+
 
 float* convertToReal(double* complexData, int size) {
     float* result = (float*)malloc(size * sizeof(float));
@@ -161,24 +162,30 @@ float* convertToReal(double* complexData, int size) {
 
 // Function to write float data to a WAV file
 void writeData(FILE *file, float data[], int size) {
-    // Find the maximum absolute value
+    // Find the maximum absolute value and calculate the normalization factor
     float maxVal = 0.0f;
     for (int i = 0; i < size; ++i) {
         float absVal = fabs(data[i]);
-        if (absVal > maxVal) {
-            maxVal = absVal;
-        }
+        maxVal = fmax(maxVal, absVal);
     }
 
     // Normalize the data and write to file
-    for (int i = 0; i < size; ++i) {
-        // Normalize the data
-        data[i] /= maxVal;
-        // Convert to short and write to file
-        short value = (short)(data[i] * 32768.0);
-        fwrite(&value, sizeof(value), 1, file);
+    if (maxVal > 0.0f) {
+        // Calculate the normalization factor only once
+        float normalizationFactor = 32768.0 / maxVal;
 
+        // Use integer-based loop for better performance
+        for (int i = 0; i < size; ++i) {
+            // Convert to short and write to file
+            short value = (short)(data[i] * normalizationFactor);
+            fwrite(&value, sizeof(value), 1, file);
+        }
+    } else {
+        // Handle the case where maxVal is 0 to avoid division by zero
+        memset(data, 0, size * sizeof(float));  // or any other suitable action
+        fwrite(data, sizeof(float), size, file);
     }
+
     printf("Done writing data\n");
 }
 
@@ -186,7 +193,6 @@ void writeData(FILE *file, float data[], int size) {
 /**
 Read the tones, and call convolve on them
 */
-//Code inspired from TA Ali Week 10 - Session 2 - Updated files
 void readTone(char *sampleTone, char *impulseTone, char *output) {
     FILE *sampleFileStream = fopen(sampleTone, "rb");
     FILE *impulseFileStream = fopen(impulseTone, "rb");
