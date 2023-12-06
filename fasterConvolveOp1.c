@@ -21,19 +21,6 @@ typedef struct {
     short bits_per_sample;
 } WavHeader;
 
-void printWavHeader(WavHeader header){
-    printf("chunk_id: %.4s\n", header.chunk_id);
-    printf("chunk_size: %d\n", header.chunk_size);
-    printf("format: %.4s\n", header.format);
-    printf("subchunk1_id: %.4s\n", header.subchunk1_id);
-    printf("subchunk1_size: %d\n", header.subchunk1_size);
-    printf("audio_format: %d\n", header.audio_format);
-    printf("num_channels: %d\n", header.num_channels);
-    printf("sample_rate: %d\n", header.sample_rate);
-    printf("byte_rate: %d\n", header.byte_rate);
-    printf("block_align: %d\n", header.block_align);
-    printf("bits_per_sample: %d\n", header.bits_per_sample);
-}
 
 //Code inspired from the file in Course Documents in the Audio FIle Formats Test Tone Sample Code C file
 void fwriteIntLSB(int value, FILE *file) {
@@ -78,6 +65,7 @@ float shortToFloat(short value) {
 }
 
 // Function to convolve two signals using the FFT
+// Code inspired from Kimiya tutorial slides on CPSC501_F23_reverse_audio_time_convolution_FFT
 void four1(double data[], int nn, int isign)
 {
     unsigned long n, mmax, m, j, istep, i;
@@ -181,13 +169,13 @@ void writeData(FILE *file, float data[], int size) {
         fwrite(&value, sizeof(value), 1, file);
 
     }
-    printf("Done writing data\n");
 }
 
 
 /**
 Read the tones, and call convolve on them
 */
+//Code inspired from TA Ali Week 10 - Session 2 - Updated files
 void readTone(char *sampleTone, char *impulseTone, char *output) {
     FILE *sampleFileStream = fopen(sampleTone, "rb");
     FILE *impulseFileStream = fopen(impulseTone, "rb");
