@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <math.h>
 
+#define SIZE       8
+#define PI         3.141592653589793
+#define TWO_PI     (2.0 * PI)
+#define SWAP(a,b)  tempr=(a);(a)=(b);(b)=tempr
+
 typedef struct {
     char chunk_id[4];
     int chunk_size;
@@ -30,7 +35,35 @@ void printWavHeader(WavHeader header){
     printf("bits_per_sample: %d\n", header.bits_per_sample);
 }
 
-//Code inspired from the file in Course Documents in the Audio FIle Formats Test Tone Sample Code C file
+
+void printFloatDataToFile(float* data, int size, const char* filename) {
+    FILE* logFile = fopen(filename, "w");
+    if (logFile == NULL) {
+        printf("Error opening the log file.\n");
+        return;
+    }
+
+    for (int i = 0; i < size; ++i) {
+        fprintf(logFile, "%f + %f\n", data[i], data[i + 1]);
+    }
+
+    fclose(logFile);
+}
+
+void printComplexDataToFile(double* complexData, int size, const char* filename) {
+    FILE* logFile = fopen(filename, "w");
+    if (logFile == NULL) {
+        printf("Error opening the log file.\n");
+        return;
+    }
+
+    for (int i = 0; i < size; i += 2) {
+        fprintf(logFile, "Complex[%d]: %f + %.2fi\n", i / 2, complexData[i], complexData[i + 1]);
+    }
+
+    fclose(logFile);
+}
+
 void fwriteIntLSB(int value, FILE *file) {
     unsigned char buffer[4];
     buffer[0] = (value & 0x000000FF);
@@ -40,7 +73,6 @@ void fwriteIntLSB(int value, FILE *file) {
     fwrite(buffer, 4, 1, file);
 }
 
-//Code inspired from the file in Course Documents in the Audio FIle Formats Test Tone Sample Code C file
 void fwriteShortLSB(short value, FILE *file) {
     unsigned char buffer[2];
     buffer[0] = (value & 0x00FF);
@@ -48,11 +80,11 @@ void fwriteShortLSB(short value, FILE *file) {
     fwrite(buffer, 2, 1, file);
 }
 
-//Code inspired from the file in Course Documents in the Audio FIle Formats Test Tone Sample Code C file
+
 void writeWavHeader(FILE *outputFile, WavHeader header , int bytes_per_sample, int numberSamples) {
     int dataChunkSize = 1 * numberSamples * bytes_per_sample;
     int formSize = 36 + dataChunkSize;
-    short int frameSize = 1 * bytes_per_sample;
+    short int frameSize = bytes_per_sample * header.num_channels;
     int bytesPerSecond =header.sample_rate * frameSize;
     fputs("RIFF", outputFile);
     fwriteIntLSB(formSize, outputFile);
@@ -73,21 +105,85 @@ float shortToFloat(short value) {
    return value / 32768.0;
 }
 
-//Slides taken from sources iwth the CPSC 501 Course Documents of TimeDomainConvolution
-void convolve(float x[], int N, float h[], int M, float y[], int P)
+// Function to convolve two signals using the FFT
+void four1(double data[], int nn, int isign)
 {
-    int n,m;
+    unsigned long n, mmax, m, j, istep, i;
+    double wtemp, wr, wpr, wpi, wi, theta;
+    double tempr, tempi;
 
-    for (n=0; n < P; n++)
-    {
-        y[n] = 0.0;
+    n = nn << 1;
+    j = 1;
+
+    for (i = 1; i < n; i += 2) {
+	if (j > i) {
+	    SWAP(data[j], data[i]);
+	    SWAP(data[j+1], data[i+1]);
+	}
+	m = nn;
+	while (m >= 2 && j > m) {
+	    j -= m;
+	    m >>= 1;
+	}
+	j += m;
     }
 
-    for (n=0; n<N; n++){
-        for (m=0; m<M; m++){
-            y[n+m] += x[n] * h[m];
-        }
+    mmax = 2;
+    while (n > mmax) {
+	istep = mmax << 1;
+	theta = isign * (6.28318530717959 / mmax);
+	wtemp = sin(0.5 * theta);
+	wpr = -2.0 * wtemp * wtemp;
+	wpi = sin(theta);
+	wr = 1.0;
+	wi = 0.0;
+	for (m = 1; m < mmax; m += 2) {
+	    for (i = m; i <= n; i += istep) {
+		j = i + mmax;
+		tempr = wr * data[j] - wi * data[j+1];
+		tempi = wr * data[j+1] + wi * data[j];
+		data[j] = data[i] - tempr;
+		data[j+1] = data[i+1] - tempi;
+		data[i] += tempr;
+		data[i+1] += tempi;
+	    }
+	    wr = (wtemp = wr) * wpr - wi * wpi + wr;
+	    wi = wi * wpr + wtemp * wpi + wi;
+	}
+	mmax = istep;
     }
+}
+
+double* multiplyFrequencyData(double* freqData1, double* freqData2, int size) {
+    double* result = (double*)malloc(size * sizeof(double));
+    for (int i = 0; i < size; i += 2) {
+        result[i] = freqData1[i] * freqData2[i] - freqData1[i+1] * freqData2[i+1]; // real part
+        result[i + 1] = freqData1[i+1] * freqData2[i] + freqData1[i] * freqData2[i+1]; // imaginary part
+    }
+    return result;
+}
+
+double* convertToComplex(float* data, int dataSize, int arraySize) {
+    double* complexData = (double*)malloc(arraySize * 2 * sizeof(double));
+
+    for (int i = 0; i < arraySize; i++) {
+        complexData[i] = 0.0;
+    }
+
+    for (int i = 0; i < dataSize; i++) {
+        complexData[i * 2] = data[i]; // real part
+    }
+    return complexData;
+}
+
+float* convertToReal(double* complexData, int size) {
+    float* result = (float*)malloc(size * sizeof(float));
+    for (int i = 0; i < size; i += 2) {
+        double real = complexData[i];
+        double imag = complexData[i + 1];
+        result[i / 2] = sqrt(real * real + imag * imag); // take the magnitude
+    }
+    return result;
 }
 
 // Function to write float data to a WAV file
@@ -110,14 +206,13 @@ void writeData(FILE *file, float data[], int size) {
         fwrite(&value, sizeof(value), 1, file);
 
     }
+    printf("Done writing data\n");
 }
 
 
 /**
 Read the tones, and call convolve on them
 */
-
-//Code inspired from TA Ali Week 10 - Session 2 - Updated files
 void readTone(char *sampleTone, char *impulseTone, char *output) {
     FILE *sampleFileStream = fopen(sampleTone, "rb");
     FILE *impulseFileStream = fopen(impulseTone, "rb");
@@ -176,16 +271,32 @@ for (int i = 0; i < totalImpulses; ++i) {
     impulseData[i] = shortToFloat(impulseValue);
 }
 
+    // Convert the real data to complex data
+    int maxSize = (int)pow(2, 24);
+    double *complexSampleData = convertToComplex(sampleData, totalSamples, maxSize);
+    double *complexImpulseData = convertToComplex(impulseData, totalImpulses, maxSize);
+
+
+    printComplexDataToFile(complexSampleData, totalSamples, "sample.txt");
+    printComplexDataToFile(complexImpulseData, totalImpulses, "impulse.txt");
+
     // Close the input files
     fclose(sampleFileStream);
     fclose(impulseFileStream);
 
     // Convolve the data
-    int outputSize = totalSamples + totalImpulses - 1;
-    float *outputData = (float *)malloc(outputSize * sizeof(float));
-    convolve(sampleData, totalSamples, impulseData, totalImpulses, outputData, outputSize);
+    four1(complexSampleData - 1, totalSamples / 2, 1);
+    four1(complexImpulseData - 1, totalImpulses / 2, 1);
+
+    double *complexOutputData = multiplyFrequencyData(complexSampleData, complexImpulseData, maxSize);
+
+    four1(complexOutputData - 1, maxSize / 2, -1);
+
+    float *outputData = convertToReal(complexOutputData, maxSize);
+    printFloatDataToFile(outputData, maxSize, "outputData.txt");
 
     // Write the output WAV file
+    int outputSize = totalSamples + totalImpulses - 1;
     writeWavHeader(outputFileStream, header_sample, bytesPerSample, outputSize);
     writeData(outputFileStream, outputData, outputSize);
 
@@ -195,6 +306,9 @@ for (int i = 0; i < totalImpulses; ++i) {
     free(sampleData);
     free(impulseData);
     free(outputData);
+    free(complexSampleData);
+    free(complexImpulseData);
+    free(complexOutputData);
 }
 
 // main line of execution
