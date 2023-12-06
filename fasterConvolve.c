@@ -21,20 +21,6 @@ typedef struct {
     short bits_per_sample;
 } WavHeader;
 
-void printWavHeader(WavHeader header){
-    printf("chunk_id: %.4s\n", header.chunk_id);
-    printf("chunk_size: %d\n", header.chunk_size);
-    printf("format: %.4s\n", header.format);
-    printf("subchunk1_id: %.4s\n", header.subchunk1_id);
-    printf("subchunk1_size: %d\n", header.subchunk1_size);
-    printf("audio_format: %d\n", header.audio_format);
-    printf("num_channels: %d\n", header.num_channels);
-    printf("sample_rate: %d\n", header.sample_rate);
-    printf("byte_rate: %d\n", header.byte_rate);
-    printf("block_align: %d\n", header.block_align);
-    printf("bits_per_sample: %d\n", header.bits_per_sample);
-}
-
 //Code inspired from the file in Course Documents in the Audio FIle Formats Test Tone Sample Code C file
 void fwriteIntLSB(int value, FILE *file) {
     unsigned char buffer[4];
@@ -179,7 +165,6 @@ void writeData(FILE *file, float data[], int size) {
         fwrite(&value, sizeof(value), 1, file);
 
     }
-    printf("Done writing data\n");
 }
 
 
