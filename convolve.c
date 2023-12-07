@@ -16,18 +16,18 @@ typedef struct {
     short bits_per_sample;
 } WavHeader;
 
-void printWavHeader(WavHeader header){
-    printf("chunk_id: %.4s\n", header.chunk_id);
-    printf("chunk_size: %d\n", header.chunk_size);
-    printf("format: %.4s\n", header.format);
-    printf("subchunk1_id: %.4s\n", header.subchunk1_id);
-    printf("subchunk1_size: %d\n", header.subchunk1_size);
-    printf("audio_format: %d\n", header.audio_format);
-    printf("num_channels: %d\n", header.num_channels);
-    printf("sample_rate: %d\n", header.sample_rate);
-    printf("byte_rate: %d\n", header.byte_rate);
-    printf("block_align: %d\n", header.block_align);
-    printf("bits_per_sample: %d\n", header.bits_per_sample);
+void writeFloatArrayToFile(const char *filename, float data[], int size) {
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        fprintf(stderr, "Error opening file for writing: %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < size; ++i) {
+        fprintf(file, "%f\n", data[i]);
+    }
+
+    fclose(file);
 }
 
 //Code inspired from the file in Course Documents in the Audio FIle Formats Test Tone Sample Code C file
@@ -186,6 +186,7 @@ for (int i = 0; i < totalImpulses; ++i) {
     convolve(sampleData, totalSamples, impulseData, totalImpulses, outputData, outputSize);
 
     // Write the output WAV file
+    writeFloatArrayToFile("data.txt", outputData, outputSize);
     writeWavHeader(outputFileStream, header_sample, bytesPerSample, outputSize);
     writeData(outputFileStream, outputData, outputSize);
 

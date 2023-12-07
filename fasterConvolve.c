@@ -114,7 +114,7 @@ void four1(double data[], int nn, int isign)
 }
 
 double* multiplyFrequencyData(double* freqData1, double* freqData2, int size) {
-    double* result = (double*)malloc(size * sizeof(double));
+    double* result = (double*)malloc(size * 2 * sizeof(double));
     for (int i = 0; i < size; i += 2) {
         result[i] = freqData1[i] * freqData2[i] - freqData1[i+1] * freqData2[i+1]; // real part
         result[i + 1] = freqData1[i+1] * freqData2[i] + freqData1[i] * freqData2[i+1]; // imaginary part
@@ -137,14 +137,11 @@ double* convertToComplex(float* data, int dataSize, int arraySize) {
 
 float* convertToReal(double* complexData, int size) {
     float* result = (float*)malloc(size * sizeof(float));
-    for (int i = 0; i < size; i += 2) {
-        double real = complexData[i];
-        double imag = complexData[i + 1];
-        result[i / 2] = sqrt(real * real + imag * imag); // take the magnitude
+    for (int i = 0; i < size; ++i) {
+        result[i] = complexData[i * 2]; // take the real part
     }
     return result;
 }
-
 // Function to write float data to a WAV file
 void writeData(FILE *file, float data[], int size) {
     // Find the maximum absolute value
@@ -155,18 +152,14 @@ void writeData(FILE *file, float data[], int size) {
             maxVal = absVal;
         }
     }
-
     // Normalize the data and write to file
     for (int i = 0; i < size; ++i) {
-        // Normalize the data
         data[i] /= maxVal;
         // Convert to short and write to file
-        short value = (short)(data[i] * 32768.0);
+        short value = (short)(data[i] * 32767.0);
         fwrite(&value, sizeof(value), 1, file);
-
     }
 }
-
 
 /**
 Read the tones, and call convolve on them
@@ -231,7 +224,10 @@ for (int i = 0; i < totalImpulses; ++i) {
 }
 
     // Convert the real data to complex data
-    int maxSize = (int)pow(2, 24);
+    int maxSize = 1;
+    while(maxSize < totalSamples) {
+        maxSize *= 2;
+    }
     double *complexSampleData = convertToComplex(sampleData, totalSamples, maxSize);
     double *complexImpulseData = convertToComplex(impulseData, totalImpulses, maxSize);
 
@@ -240,17 +236,16 @@ for (int i = 0; i < totalImpulses; ++i) {
     fclose(impulseFileStream);
 
     // Convolve the data
-    four1(complexSampleData - 1, totalSamples / 2, 1);
-    four1(complexImpulseData - 1, totalImpulses / 2, 1);
+    four1(complexSampleData - 1, maxSize, 1);
+    four1(complexImpulseData - 1, maxSize, 1);
 
     double *complexOutputData = multiplyFrequencyData(complexSampleData, complexImpulseData, maxSize);
 
-    four1(complexOutputData - 1, maxSize / 2, -1);
-
-    float *outputData = convertToReal(complexOutputData, maxSize);
+    four1(complexOutputData - 1, maxSize, -1);
 
     // Write the output WAV file
     int outputSize = totalSamples + totalImpulses - 1;
+    float *outputData = convertToReal(complexOutputData, outputSize);
     writeWavHeader(outputFileStream, header_sample, bytesPerSample, outputSize);
     writeData(outputFileStream, outputData, outputSize);
 
@@ -281,4 +276,6 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
     readTone(sampleTone, impulseTone, output);
+    printf("Done\n");
 }
+
